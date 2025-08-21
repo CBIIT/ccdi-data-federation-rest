@@ -1,3 +1,4 @@
+// Integration tests: File endpoints
 const request = require('supertest');
 const app = require('../app');
 

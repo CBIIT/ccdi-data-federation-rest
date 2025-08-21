@@ -1,3 +1,9 @@
+/**
+ * Routes: File
+ * ------------
+ * Exposes list (with filtering/pagination), entity lookup, grouped counts and
+ * summary endpoints for File entities backed by the service layer.
+ */
 const express = require('express');
 const router = express.Router();
 const fileService = require('../services/fileService');

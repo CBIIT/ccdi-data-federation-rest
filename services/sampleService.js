@@ -1,3 +1,11 @@
+/**
+ * Service: Sample
+ * ---------------
+ * Orchestrates list/get/count/summary operations for Sample entities. Handles
+ * pagination normalization & validation, translates repository misses or
+ * unsupported aggregation fields into typed domain errors, and applies simple
+ * read‑through caching for count & summary endpoints.
+ */
 const repo = require('../db/sampleRepository');
 const { cached } = require('../lib/cache');
 const { UnsupportedFieldError, NotFoundError, InvalidParametersError } = require('../lib/errorTypes');

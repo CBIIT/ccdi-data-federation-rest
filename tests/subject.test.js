@@ -1,3 +1,4 @@
+// Integration tests: Subject endpoints
 const request = require('supertest');
 const app = require('../app');
 

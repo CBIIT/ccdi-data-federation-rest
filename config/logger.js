@@ -1,3 +1,10 @@
+/**
+ * Logger Configuration
+ * --------------------
+ * Central Winston logger emitting JSON structured logs to file + colored
+ * console output in non-production environments. Downstream modules import
+ * this singleton so log formatting is consistent across the service.
+ */
 const winston = require('winston');
 const path = require('path');
 

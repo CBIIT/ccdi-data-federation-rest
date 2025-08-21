@@ -1,3 +1,9 @@
+/**
+ * Routes: Subject Diagnosis Search
+ * --------------------------------
+ * Performs simple substring searches over subject diagnosis metadata with
+ * pagination applied in-route (repository returns full match set currently).
+ */
 const express = require('express');
 const router = express.Router();
 const diagnosisService = require('../services/diagnosisService');

@@ -1,5 +1,15 @@
+/**
+ * Middleware: Error Handler
+ * -------------------------
+ * Centralizes translation of thrown domain / validation / system errors into
+ * a stable JSON error envelope: { errors: [ { kind, message, ... } ] }.
+ * Domain errors attach metadata (field, parameters, entity, etc.) consumed by
+ * clients for better UX. Stack traces only included during development.
+ */
 const logger = require('../config/logger');
 
+// Central error mapper -> spec envelope { errors: [ { kind, ... } ] }
+// Domain errors (see lib/errorTypes) set statusCode + kind so we mostly pass them through.
 const errorHandler = (err, req, res, next) => {
   logger.error('Error occurred:', {
     error: err.message,

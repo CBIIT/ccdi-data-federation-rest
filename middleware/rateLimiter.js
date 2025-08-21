@@ -1,3 +1,10 @@
+/**
+ * Middleware: Rate Limiter
+ * ------------------------
+ * Basic IP based throttling using express-rate-limit. Exposed separately so
+ * configuration (window, max) can be tuned via environment variables without
+ * touching application wiring.
+ */
 const rateLimit = require('express-rate-limit');
 
 const rateLimiter = rateLimit({

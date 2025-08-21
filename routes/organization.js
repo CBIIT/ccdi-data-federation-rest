@@ -1,3 +1,8 @@
+/**
+ * Routes: Organization
+ * --------------------
+ * Read-only endpoints for listing & retrieving organizations.
+ */
 const express = require('express');
 const router = express.Router();
 const organizationService = require('../services/organizationService');

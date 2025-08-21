@@ -1,3 +1,11 @@
+/**
+ * Repository: Sample
+ * ------------------
+ * Encapsulates access to Sample entities backed by mock in-memory arrays.
+ * Exposes list/get/counts/summary plus exported allowlists that are consumed
+ * by higher layers (service + metadata endpoints). Filter logic is centralized
+ * so the service layer remains thin and focused on validation / error mapping.
+ */
 const { samples } = require('./mockData');
 const { applyFilters, paginate, groupCounts } = require('./common');
 

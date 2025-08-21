@@ -1,4 +1,12 @@
-// Mock in-memory data to simulate Memgraph results
+/**
+ * Mock Data Seed
+ * --------------
+ * Provides small in-memory collections that mimic the shape of records the
+ * real graph/database layer will return. Repositories import these arrays to
+ * simulate filtering, pagination and aggregation logic during early API
+ * development & contract testing. Swap out with real persistence without
+ * changing higher application layers.
+ */
 // NOTE: Replace with real Memgraph Cypher queries in production
 
 const organizations = [

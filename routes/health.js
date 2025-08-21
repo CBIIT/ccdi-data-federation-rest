@@ -1,3 +1,10 @@
+/**
+ * Routes: Health & Probes
+ * -----------------------
+ * Implements health, readiness and liveness endpoints with lightweight system
+ * metrics and optional Redis connectivity reporting. Swagger docs describe
+ * contract for operational tooling & Kubernetes probes.
+ */
 const express = require('express');
 const router = express.Router();
 const { getCache } = require('../config/redis');

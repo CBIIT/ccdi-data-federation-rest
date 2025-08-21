@@ -1,3 +1,10 @@
+/**
+ * Routes: Sample
+ * --------------
+ * REST interface for Sample entities providing listing with filtering &
+ * pagination, individual lookup, grouped field counts and summary aggregates.
+ * Swagger annotations document externally visible contract.
+ */
 const express = require('express');
 const router = express.Router();
 const sampleService = require('../services/sampleService');

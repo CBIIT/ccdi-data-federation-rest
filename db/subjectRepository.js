@@ -1,3 +1,11 @@
+/**
+ * Repository: Subject
+ * -------------------
+ * Data access facade over the in-memory mock dataset. Responsible for
+ * applying filter constraints, pagination slicing, supported count aggregations
+ * and a small summary aggregate. Upstream layers rely on exported constants to
+ * expose discoverable metadata & validation without duplicating field lists.
+ */
 const { subjects } = require('./mockData');
 const { applyFilters, paginate, groupCounts } = require('./common');
 

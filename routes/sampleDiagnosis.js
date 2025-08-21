@@ -1,3 +1,8 @@
+/**
+ * Routes: Sample Diagnosis Search
+ * -------------------------------
+ * Substring search across sample diagnosis fields with simple pagination.
+ */
 const express = require('express');
 const router = express.Router();
 const diagnosisService = require('../services/diagnosisService');

@@ -1,3 +1,8 @@
+/**
+ * Routes: Namespace
+ * -----------------
+ * Simple read-only endpoints exposing registered namespaces and lookups.
+ */
 const express = require('express');
 const router = express.Router();
 const namespaceService = require('../services/namespaceService');

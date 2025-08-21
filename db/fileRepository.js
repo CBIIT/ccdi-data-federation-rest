@@ -1,3 +1,12 @@
+/**
+ * Repository: File
+ * -----------------
+ * In-memory data access abstraction for File entities. Supports filtered &
+ * paginated listing, entity lookup, simple value counts (group by) on a
+ * curated allowlist of fields, and a lightweight summary aggregate used by
+ * UI overview components. Designed so a future graph / database adapter can
+ * implement the same exported surface with minimal changes upstream.
+ */
 const { files } = require('./mockData');
 const { applyFilters, paginate, groupCounts } = require('./common');
 

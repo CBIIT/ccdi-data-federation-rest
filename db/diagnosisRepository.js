@@ -1,3 +1,10 @@
+/**
+ * Repository: Diagnosis (Search Facets)
+ * -------------------------------------
+ * Provides simple substring search utilities over diagnosis related fields
+ * for samples & subjects. Intended as a placeholder until richer indexing /
+ * full‑text capabilities are integrated.
+ */
 const { samples, subjects } = require('./mockData');
 
 function sampleSearch(term) {

@@ -1,3 +1,11 @@
+/**
+ * Service: Subject
+ * ----------------
+ * Orchestrates repository calls, enforces pagination sanity & translates
+ * missing entities / unsupported aggregation fields into domain errors used
+ * by the centralized error handler. Also wraps expensive count/summary calls
+ * in a short‑lived cache to reduce repeated computation on hot endpoints.
+ */
 const repo = require('../db/subjectRepository');
 const { cached } = require('../lib/cache');
 const { UnsupportedFieldError, NotFoundError, InvalidParametersError } = require('../lib/errorTypes');

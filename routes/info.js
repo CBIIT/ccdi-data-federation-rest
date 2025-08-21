@@ -1,3 +1,8 @@
+/**
+ * Routes: Info
+ * ------------
+ * Returns consolidated system + dataset metadata for observability surfaces.
+ */
 const express = require('express');
 const router = express.Router();
 const infoService = require('../services/infoService');

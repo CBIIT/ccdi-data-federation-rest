@@ -1,3 +1,9 @@
+/**
+ * Repository: Info
+ * -----------------
+ * Returns server + mock data metadata. Acts as a seam for later enrichment with
+ * dynamic build information, migration state, upstream service versions, etc.
+ */
 function info() {
   return {
     server: {

@@ -1,3 +1,10 @@
+/**
+ * Service: File
+ * -------------
+ * Provides list/get/count/summary capabilities for File entities. Validates
+ * pagination, maps invalid user input & unsupported aggregation fields into
+ * domain errors, and caches heavier aggregation style responses.
+ */
 const repo = require('../db/fileRepository');
 const { cached } = require('../lib/cache');
 const { UnsupportedFieldError, NotFoundError, InvalidParametersError } = require('../lib/errorTypes');

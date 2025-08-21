@@ -1,3 +1,11 @@
+/**
+ * Application Entry Point
+ * -----------------------
+ * Wires core middleware (security, logging, rate limiting), mounts versioned API routes
+ * under /api/v1, exposes /health and swagger docs. The underlying data layer is currently
+ * an in-memory mock (db/*) accessed via repository + service layers. Replace repositories
+ * later to point at a real graph / database without changing route handlers.
+ */
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');

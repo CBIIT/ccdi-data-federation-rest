@@ -1,3 +1,4 @@
+// Integration tests: Health & probe endpoints
 const request = require('supertest');
 const app = require('../app');
 

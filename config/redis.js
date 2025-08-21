@@ -1,3 +1,11 @@
+/**
+ * Redis Client Wrapper
+ * --------------------
+ * Lazily initializes a single shared Redis client when REDIS_URL is provided.
+ * Exposes thin promise-based helpers used by the caching abstraction. All
+ * methods fail soft (log & return null/false) so upstream handlers never
+ * break when Redis is unavailable.
+ */
 const redis = require('redis');
 const logger = require('./logger');
 

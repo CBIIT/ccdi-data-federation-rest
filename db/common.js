@@ -1,4 +1,12 @@
-// Common helpers for repositories
+/**
+ * Repository Common Helpers
+ * -------------------------
+ * applyFilters(items, filters, allowlist) - shallow equality & array inclusion
+ * paginate(items, page, perPage) - slice window
+ * groupCounts(items, field) - frequency aggregation with array flattening
+ * These remain intentionally minimal; complex querying will live in the real
+ * data layer once a persistent store is integrated.
+ */
 function applyFilters(items, filters, allowlist) {
   if (!filters || Object.keys(filters).length === 0) return items;
   return items.filter(item => {

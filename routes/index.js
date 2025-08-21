@@ -1,3 +1,8 @@
+/**
+ * Routes: API v1 Aggregator
+ * -------------------------
+ * Composes individual entity / utility routers under a versioned namespace.
+ */
 const express = require('express');
 const router = express.Router();
 

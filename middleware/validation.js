@@ -1,3 +1,10 @@
+/**
+ * Middleware: Validation
+ * ----------------------
+ * Generic request validator factory built on Joi. Supplies a small catalog of
+ * common schemas for reuse. Validation errors are translated into a uniform
+ * envelope by the central error handler (mapped via name === 'ValidationError').
+ */
 const Joi = require('joi');
 
 const validateRequest = (schema) => {
