@@ -1,0 +1,3 @@
+[submodule "model/ccdi-model"]
+	path = model/ccdi-model
+	url = https://github.com/CBIIT/ccdi-model
