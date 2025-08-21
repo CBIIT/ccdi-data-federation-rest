@@ -105,42 +105,15 @@ Cross-cutting behaviors:
 
 ---
 
-##  Filtering Model → Cypher Translation
+##  Filtering Model
 
-List endpoints accept a dynamic set of query parameters representing exact-match filters (case-sensitive) except:
-* Multi-value fields: OR semantics across stored values (e.g., `race` array).
-* Free-text experimental search (`search` param on experimental endpoints): case-insensitive substring match over designated diagnosis fields.
-* Unharmonized fields: prefixed with `metadata.unharmonized.` externally; internally mapped to node property namespace (e.g., property prefix `uh_` or nested map) — design decision: flatten and prefix with `uh__` for indexing ease.
-
-Cypher construction pattern (pseudo):
-```text
-MATCH (n:Subject)
-WHERE allFilters
-RETURN n
-SKIP $offset LIMIT $limit
-```
-
-Dynamic predicate builder (examples):
-* Single-valued: `n.vital_status = $vital_status`
-* Multi-valued stored as list: `$race IN n.race` OR `ANY(r IN n.race WHERE r = $race)` (choose latter for index usage)
-* Unharmonized: `n.uh__<field> = $uh_field`
-* Case-insensitive contains (experimental): `ANY(d IN n.associated_diagnoses WHERE toLower(d) CONTAINS toLower($search))`
-
-Sanitization: Allow only whitelisted property names (from metadata fields endpoints) to prevent injection. Reject unknown `field` with 422.
+List endpoints support exact-match filtering (case-sensitive) across harmonized and unharmonized fields, multi-value fields apply OR semantics within the field, experimental diagnosis endpoints apply case-insensitive substring matching, and an allowlist prevents unsupported field usage.
 
 ---
 
 ## `/by/{field}/count` Endpoints
 
-Logic:
-1. Validate `field` is among allowed fields for that entity (subject/sample/file) derived from metadata fields repository.
-2. Generate Cypher: `MATCH (n:Sample) WITH n, n.<field> AS k RETURN k AS field, count(*) AS count ORDER BY count DESC`.
-3. Null / empty handling: exclude rows where `k IS NULL OR (k = '' AND k <> 0)`.
-4. Response shape matches `responses.by.count.<entity>.Results` (array of objects) sorted by count, deterministic tie-breaker (e.g., `field ASC`).
-
-Edge Cases:
-* Unsupported field → 422 `UnsupportedField`.
-* Field exists but all values null → empty array (200).
+Count endpoints group entities by a validated field and return frequency distributions, excluding null or empty values, and respond with 422 for unsupported fields.
 
 ---
 
@@ -231,152 +204,109 @@ Test layers:
 ---
 
 ## Folder Structure
-Proposed refactor (aligning with existing folders while removing GraphQL specifics):
+Refined structure including all API endpoint domains from the OpenAPI specification.
 
 ```
 project-root/
-├── app.js                    # Express bootstrap
+├── app.js                              # Express bootstrap
 ├── package.json
 ├── config/
-│   ├── index.js              # Aggregated config (env parsing)
-│   └── memgraph.js           # Memgraph connection factory
-├── db/                       # (Optional: alias 'repository/' or 'data/')
-│   └── sampleRepository.js   # Cypher queries for Samples
-├── services/
-│   └── sampleService.js      # Domain/service logic wrapping repositories
-├── routes/
-│   ├── index.js              # Mount all route modules
-│   └── sample.js             # /sample endpoints (uses service layer)
+│   ├── index.js                        # Aggregated config (env parsing, defaults)
+│   ├── memgraphDriver.js               # neo4j-driver (Memgraph) singleton factory
+│   └── logger.js                       # Winston logger configuration
+├── db/                                 # Data access (repositories) – pure Cypher
+│   ├── subjectRepository.js            # Subject queries (list, show, counts, summary)
+│   ├── sampleRepository.js             # Sample queries
+│   ├── fileRepository.js               # File queries
+│   ├── metadataRepository.js           # Field allowlists & metadata field listings
+│   ├── namespaceRepository.js          # Namespace retrieval
+│   ├── organizationRepository.js       # Organization retrieval
+│   ├── infoRepository.js               # Server info (version, build data)
+│   └── diagnosisRepository.js          # Experimental diagnosis search logic
+├── services/                           # Domain orchestration / business logic
+│   ├── subjectService.js
+│   ├── sampleService.js
+│   ├── fileService.js
+│   ├── metadataService.js
+│   ├── namespaceService.js
+│   ├── organizationService.js
+│   ├── infoService.js
+│   └── diagnosisService.js             # Wraps experimental endpoints
+├── routes/                             # HTTP layer (validation + mapping to services)
+│   ├── index.js                        # Aggregates and mounts all routers
+│   ├── subject.js                      # /subject, /subject/{...}, /subject/by/{field}/count, /subject/summary
+│   ├── sample.js                       # /sample, /sample/{...}, /sample/by/{field}/count, /sample/summary
+│   ├── file.js                         # /file, /file/{...}, /file/by/{field}/count, /file/summary
+│   ├── metadata.js                     # /metadata/fields/{entity}
+│   ├── namespace.js                    # /namespace, /namespace/{organization}/{namespace}
+│   ├── organization.js                 # /organization, /organization/{name}
+│   ├── info.js                         # /info
+│   ├── subjectDiagnosis.js             # /subject-diagnosis (experimental)
+│   └── sampleDiagnosis.js              # /sample-diagnosis (experimental)
 ├── middleware/
-│   ├── validation.js
-│   ├── rateLimiter.js
-│   ├── errorHandler.js
-│   └── requestContext.js     # Correlation IDs, per-request metadata
-├── cache/                    # (optional)
-│   └── redisClient.js        # Redis init + helper functions
+│   ├── validation.js                   # Schema-based query/path validation
+│   ├── rateLimiter.js                  # express-rate-limit configuration
+│   ├── errorHandler.js                 # Normalizes thrown errors to spec envelope
+│   ├── requestContext.js               # Correlation IDs, timing, logging context
+│   └── pagination.js                   # Common pagination parsing & Link header builder
+├── cache/
+│   ├── redisClient.js                  # Redis initialization
+│   └── cacheKeys.js                    # Deterministic key builders (counts, summary)
+├── lib/                                # Shared utilities (avoid circular deps)
+│   ├── cypherBuilder.js                # Dynamic WHERE / count query generation
+│   ├── fieldAllowlist.js               # Loads + caches allowable filter/aggregation fields
+│   └── errorTypes.js                   # Custom error classes (UnsupportedField, etc.)
 ├── docs/
-│   └── openapi.yaml          # REST API specification
+│   ├── openapi.yaml                    # REST API specification (source of truth)
+│   └── design/                         # Additional architecture notes (optional)
 ├── tests/
-│   ├── sample.test.js
-│   ├── health.test.js
-│   └── setup.js
-├── scripts/                  # Dev & ops scripts (e.g., load sample data)
-│   └── seed.js
-└── docker/                   # Docker & compose overrides
-  └── docker-compose.dev.yml
+│   ├── integration/
+│   │   ├── subject.int.test.js
+│   │   ├── sample.int.test.js
+│   │   ├── file.int.test.js
+│   │   ├── metadata.int.test.js
+│   │   ├── namespace.int.test.js
+│   │   ├── organization.int.test.js
+│   │   ├── info.int.test.js
+│   │   └── diagnosis.int.test.js
+│   ├── unit/
+│   │   ├── cypherBuilder.test.js
+│   │   ├── fieldAllowlist.test.js
+│   │   └── pagination.test.js
+│   └── setup.js                        # Jest global setup (Memgraph container, env)
+├── scripts/
+│   ├── seed.js                         # Load seed data into Memgraph
+│   ├── build-openapi.js                # (Optional) validation or bundling of spec
+│   └── generate-allowlist.js           # Derive allowlist from openapi -> fieldAllowlist
+├── docker/
+│   ├── docker-compose.dev.yml
+│   └── memgraph.conf                   # Custom Memgraph config (if needed)
+├── .env.example                        # Example environment configuration
+└── README.md                           # Project overview & quick start
 ```
 
 Notes:
-- The existing `graphql/` directory can be deprecated; migrate any generic utilities if still useful.
-- `db/` focuses on pure data access (no HTTP, no business rules).
-- `services/` enforces separation between HTTP layer and Cypher specifics.
-- Add `requestContext.js` middleware early to enrich logs (traceability).
-- Introduce `openapi.yaml` early to drive contract-first evolution.
+- Each repository exposes only pure data access functions returning plain objects.
+- Services layer composes repositories, applies business logic & caching.
+- Route modules stay thin: validation → service call → response mapping.
+- `fieldAllowlist.js` hydrated at startup (from metadataRepository or static file) to validate `/by/{field}/count` and filter params.
+- Experimental endpoints placed with explicit naming to allow easy isolation or removal.
 
 ---
 
-## REST to Cypher Mapping
-
-### Example Mapping Table
-
-| REST Endpoint | Cypher Query (Pseudo) |
-|---------------|----------------------|
-| `/sample/by/tumor_status/count` | `MATCH (s:Sample) WITH s.tumor_status AS k WHERE k IS NOT NULL RETURN k AS field, count(*) AS count` |
-| `/sample/by/anatomical_sites/count` | `MATCH (s:Sample) UNWIND s.anatomical_sites AS k WITH k WHERE k IS NOT NULL RETURN k AS field, count(*) AS count` |
-| `/sample/by/tumor_classification/count` | `MATCH (s:Sample) WITH s.tumor_classification AS k WHERE k IS NOT NULL RETURN k AS field, count(*) AS count` |
-| `/subject/by/race/count` | `MATCH (n:Subject) UNWIND n.race AS k WITH k WHERE k IS NOT NULL RETURN k AS field, count(*) AS count` |
-| `/file/by/type/count` | `MATCH (f:File) WITH f.type AS k WHERE k IS NOT NULL RETURN k AS field, count(*) AS count` |
+<!-- REST to Cypher Mapping section intentionally removed (implementation detail not required) -->
 
 ---
 
-## sample.js - REST Route
-
-```js
-const express = require('express');
-const neo4j = require('neo4j-driver');
-const router = express.Router();
-
-const FIELD_TO_PROPERTY_MAP = {
-  tumor_status: 'tumor_status',
-  anatomical_sites: 'anatomical_sites', // list field example
-  tumor_classification: 'tumor_classification',
-};
-
-// Single shared driver (initialize once per process)
-const driver = neo4j.driver(
-  process.env.MEMGRAPH_URI || 'bolt://localhost:7687',
-  neo4j.auth.basic(process.env.MEMGRAPH_USER || 'neo4j', process.env.MEMGRAPH_PASSWORD || 'password'),
-  { disableLosslessIntegers: true }
-);
-
-router.get('/by/:field/count', async (req, res, next) => {
-  const field = req.params.field;
-  const property = FIELD_TO_PROPERTY_MAP[field];
-
-  if (!property) {
-    return res.status(422).json({
-      errors: [
-        {
-          kind: 'UnsupportedField',
-          field,
-            reason: 'This field is not present for samples.',
-            message: `Field '${field}' is not supported.`,
-        },
-      ],
-    });
-  }
-
-  const session = driver.session({ defaultAccessMode: neo4j.session.READ });
-  try {
-    // Handle potential list UNWIND automatically
-    const cypher = `
-      MATCH (s:Sample)
-      WITH s, s.${property} AS raw
-      ${property === 'anatomical_sites' ? 'UNWIND raw AS value' : 'WITH raw AS value'}
-      WITH value WHERE value IS NOT NULL
-      RETURN value AS field, count(*) AS count
-      ORDER BY count DESC, field ASC
-    `;
-    const result = await session.run(cypher, {});
-    const payload = result.records.map(r => ({ field: r.get('field'), count: r.get('count') }));
-    return res.json(payload);
-  } catch (err) {
-    return next(err);
-  } finally {
-    await session.close();
-  }
-});
-
-module.exports = router;
-```
+<!-- Sample route implementation removed (implementation detail not required) -->
 
 ---
 
-## app.js - Entry Point
-
-```js
-const express = require('express');
-const sampleRoutes = require('./routes/sample');
-
-const app = express();
-app.use(express.json());
-app.use('/sample', sampleRoutes);
-
-app.listen(3000, () => {
-  console.log('REST adapter running on port 3000');
-});
-```
+<!-- App entry point implementation removed (implementation detail not required) -->
 
 ---
 
-## Example Response
-
-```json
-[
-  { "field": "Metastatic", "count": 12 },
-  { "field": "Primary", "count": 8 }
-]
-```
+<!-- Example response removed (implementation detail not required) -->
 
 ---
 
