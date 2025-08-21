@@ -11,7 +11,7 @@ const errorHandler = require('./middleware/errorHandler');
 const rateLimiter = require('./middleware/rateLimiter');
 
 // Import routes
-const sampleRoutes = require('./routes/sample');
+const apiRoutes = require('./routes');
 const healthRoutes = require('./routes/health');
 
 const app = express();
@@ -54,7 +54,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // Routes
 app.use('/health', healthRoutes);
-app.use('/api/v1/sample', sampleRoutes);
+app.use('/api/v1', apiRoutes);
 
 // Root endpoint
 app.get('/', (req, res) => {

@@ -1,10 +1,19 @@
 const express = require('express');
 const router = express.Router();
-const graphqlClient = require('../graphql/client');
-const { validateRequest, schemas } = require('../middleware/validation');
-const { getCache, setCache } = require('../config/redis');
-const { FIELD_TO_QUERY_MAP, SAMPLE_COUNT_QUERIES, SAMPLE_DETAILS_QUERY } = require('../graphql/queries');
-const logger = require('../config/logger');
+const sampleService = require('../services/sampleService');
+const { buildLinkHeader } = require('../lib/pagination');
+const Joi = require('joi');
+const { InvalidParametersError } = require('../lib/errorTypes');
+
+const SAMPLE_FILTERS = ['disease_phase','anatomical_sites','library_selection_method','library_strategy','library_source_material','preservation_method','tumor_grade','specimen_molecular_analyte_type','tissue_type','tumor_classification','age_at_diagnosis','age_at_collection','tumor_tissue_morphology','depositions','diagnosis'];
+const paginationSchema = Joi.object({ page: Joi.number().integer().min(1).default(1), per_page: Joi.number().integer().min(1).max(1000).default(100)});
+function extractAndValidate(q){
+  const { error, value } = paginationSchema.validate({ page: q.page, per_page: q.per_page });
+  if (error) throw new InvalidParametersError(['page','per_page'], error.message);
+  const unknown = Object.keys(q).filter(k => !['page','per_page'].includes(k) && !SAMPLE_FILTERS.includes(k));
+  if (unknown.length) throw new InvalidParametersError(unknown, 'Unsupported filter parameters');
+  return value;
+}
 
 /**
  * @swagger
@@ -88,76 +97,8 @@ const logger = require('../config/logger');
  *             schema:
  *               $ref: '#/components/schemas/Error'
  */
-router.get('/by/:field/count', validateRequest(schemas.sampleByFieldCount), async (req, res, next) => {
-  try {
-    const { field } = req.params;
-    const { limit = 100, offset = 0 } = req.query;
-    
-    // Check if field is supported
-    const gqlField = FIELD_TO_QUERY_MAP[field];
-    if (!gqlField) {
-      return res.status(422).json({
-        error: {
-          message: `Field '${field}' is not supported`,
-          statusCode: 422,
-          timestamp: new Date().toISOString(),
-          path: req.originalUrl,
-          method: req.method,
-          details: {
-            kind: 'UnsupportedField',
-            field,
-            reason: 'This field is not present for samples.',
-            supportedFields: Object.keys(FIELD_TO_QUERY_MAP),
-          },
-        },
-      });
-    }
-
-    // Generate cache key
-    const cacheKey = `sample:${field}:count:${limit}:${offset}`;
-    
-    // Try to get from cache first
-    const cachedResult = await getCache(cacheKey);
-    if (cachedResult) {
-      logger.info(`Cache hit for ${cacheKey}`);
-      return res.json(cachedResult);
-    }
-
-    // Get GraphQL query
-    const query = SAMPLE_COUNT_QUERIES[gqlField];
-    // const variables = { limit: parseInt(limit), offset: parseInt(offset) };
-
-    // Execute GraphQL query
-    const data = await graphqlClient.query(query);
-    console.log(query); // Debugging line to check the response structure
-    if (!data || !data[gqlField]) {
-      return res.status(500).json({
-        error: {
-          message: 'No data returned from GraphQL service',
-          statusCode: 500,
-          timestamp: new Date().toISOString(),
-          path: req.originalUrl,
-          method: req.method,
-        },
-      });
-    }
-
-    const result = data[gqlField];
-    
-    // Cache the result
-    await setCache(cacheKey, result);
-    
-    logger.info(`Successfully retrieved ${field} counts`, { 
-      count: result.length, 
-      limit, 
-      offset 
-    });
-
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
+router.get('/by/:field/count', async (req, res, next) => {
+  try { res.json(await sampleService.counts(req.params.field)); } catch(e){ next(e);} });
 
 /**
  * @swagger
@@ -213,66 +154,16 @@ router.get('/by/:field/count', validateRequest(schemas.sampleByFieldCount), asyn
  *                     total:
  *                       type: integer
  */
-router.get('/', async (req, res, next) => {
-  try {
-    const { limit = 100, offset = 0, ...filters } = req.query;
-    
-    // Generate cache key based on filters
-    const cacheKey = `samples:${JSON.stringify(filters)}:${limit}:${offset}`;
-    
-    // Try to get from cache first
-    const cachedResult = await getCache(cacheKey);
-    if (cachedResult) {
-      logger.info(`Cache hit for ${cacheKey}`);
-      return res.json(cachedResult);
-    }
+router.get('/', (req, res, next) => { try {
+  const { page, per_page } = extractAndValidate(req.query);
+  const result = sampleService.list({ ...req.query, page, per_page });
+  res.set('Link', buildLinkHeader(req, result.pagination.page, result.pagination.per_page, result.pagination.total));
+  res.json(result);
+} catch(e){ next(e);} });
 
-    // Build GraphQL variables
-    const variables = {
-      filters: Object.keys(filters).length > 0 ? filters : null,
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-    };
+router.get('/:organization/:namespace/:name', (req,res,next)=> { try { const { organization, namespace, name } = req.params; res.json(sampleService.get(organization, namespace, name)); } catch(e){ next(e);} });
 
-    // Execute GraphQL query
-    const data = await graphqlClient.query(SAMPLE_DETAILS_QUERY, variables);
-    
-    if (!data || !data.samples) {
-      return res.status(500).json({
-        error: {
-          message: 'No data returned from GraphQL service',
-          statusCode: 500,
-          timestamp: new Date().toISOString(),
-          path: req.originalUrl,
-          method: req.method,
-        },
-      });
-    }
-
-    const result = {
-      data: data.samples,
-      pagination: {
-        limit: parseInt(limit),
-        offset: parseInt(offset),
-        total: data.samples.length, // This would ideally come from a separate count query
-      },
-    };
-    
-    // Cache the result
-    await setCache(cacheKey, result);
-    
-    logger.info('Successfully retrieved sample details', { 
-      count: data.samples.length, 
-      filters, 
-      limit, 
-      offset 
-    });
-
-    res.json(result);
-  } catch (error) {
-    next(error);
-  }
-});
+router.get('/summary', (req,res,next)=> { try { res.json(sampleService.summary()); } catch(e){ next(e);} });
 
 /**
  * @swagger
@@ -295,12 +186,6 @@ router.get('/', async (req, res, next) => {
  *                 fieldMappings:
  *                   type: object
  */
-router.get('/fields', (req, res) => {
-  res.json({
-    supportedFields: Object.keys(FIELD_TO_QUERY_MAP),
-    fieldMappings: FIELD_TO_QUERY_MAP,
-    description: 'Use these fields in the /by/{field}/count endpoint',
-  });
-});
+// Deprecated fields endpoint removed in mock implementation
 
 module.exports = router;

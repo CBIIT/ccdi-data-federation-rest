@@ -1,0 +1,166 @@
+{
+  "info": {
+    "name": "CCDI Federation DCC Node",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Postman collection for CCDI Federation DCC Node mock REST API endpoints."
+  },
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Health Summary",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/health"},
+          "response": []
+        },
+        {
+          "name": "Health Liveness",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/health/liveness"},
+          "response": []
+        },
+        {
+          "name": "Health Readiness",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/health/readiness"},
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Info",
+      "item": [
+        {
+          "name": "Server Info",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/info"},
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Subjects",
+      "description": "Subject listing, details, counts, and summary endpoints.",
+      "item": [
+        {
+          "name": "List Subjects",
+            "request": {
+              "method": "GET",
+              "url": {
+                "raw": "{{federation_dcc_local_url}}/api/v1/subject?page=1&per_page=100",
+                "host": ["{{baseHost}}"],
+                "path": ["api","v1","subject"],
+                "query": [
+                  {"key": "page", "value": "1"},
+                  {"key": "per_page", "value": "100"}
+                ]
+              },
+              "description": "List subjects with pagination. Add filter query params (sex, race, ethnicity, vital_status, age_at_vital_status, identifiers, depositions)."
+            },
+            "response": []
+        },
+        {
+          "name": "Get Subject",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/subject/{{organization}}/{{namespace}}/{{subject_name}}"},
+          "response": []
+        },
+        {
+          "name": "Subject Counts (sex)",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/subject/by/sex/count"},
+          "response": []
+        },
+        {
+          "name": "Subject Summary",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/subject/summary"},
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Samples",
+      "description": "Sample listing, details, counts, and summary endpoints.",
+      "item": [
+        {
+          "name": "List Samples",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/sample?page=1&per_page=100"},
+          "response": []
+        },
+        {
+          "name": "Get Sample",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/sample/{{organization}}/{{namespace}}/{{sample_name}}"},
+          "response": []
+        },
+        {
+          "name": "Sample Counts (disease_phase)",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/sample/by/disease_phase/count"},
+          "response": []
+        },
+        {
+          "name": "Sample Summary",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/sample/summary"},
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Files",
+      "description": "File listing, details, counts, and summary endpoints.",
+      "item": [
+        {
+          "name": "List Files",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/file?page=1&per_page=100"},
+          "response": []
+        },
+        {
+          "name": "Get File",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/file/{{organization}}/{{namespace}}/{{file_name}}"},
+          "response": []
+        },
+        {
+          "name": "File Counts (type)",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/file/by/type/count"},
+          "response": []
+        },
+        {
+          "name": "File Summary",
+          "request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/file/summary"},
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "Metadata Fields",
+      "item": [
+        {"name": "Subject Fields","request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/metadata/fields/subject"},"response": []},
+        {"name": "Sample Fields","request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/metadata/fields/sample"},"response": []},
+        {"name": "File Fields","request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/metadata/fields/file"},"response": []}
+      ]
+    },
+    {
+      "name": "Namespaces",
+      "item": [
+        {"name": "List Namespaces","request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/namespace"},"response": []},
+        {"name": "Get Namespace","request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/namespace/{{organization}}/{{namespace}}"},"response": []}
+      ]
+    },
+    {
+      "name": "Organizations",
+      "item": [
+        {"name": "List Organizations","request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/organization"},"response": []},
+        {"name": "Get Organization","request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/organization/{{organization}}"},"response": []}
+      ]
+    },
+    {
+      "name": "Diagnosis (Experimental)",
+      "item": [
+        {"name": "Sample Diagnosis Search","request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/sample-diagnosis?search=Leukemia"},"response": []},
+        {"name": "Subject Diagnosis Search","request": {"method": "GET","url": "{{federation_dcc_local_url}}/api/v1/subject-diagnosis?search=Leukemia"},"response": []}
+      ]
+    }
+  ],
+  "variable": [
+  {"key": "federation_dcc_local_url", "value": "http://localhost:3000"},
+    {"key": "organization", "value": "ExampleOrg"},
+    {"key": "namespace", "value": "StudyA"},
+    {"key": "subject_name", "value": "SUBJ001"},
+    {"key": "sample_name", "value": "SAMP001"},
+    {"key": "file_name", "value": "FILE001"}
+  ]
+}

@@ -6,7 +6,6 @@ module.exports = {
     'routes/**/*.js',
     'middleware/**/*.js',
     'config/**/*.js',
-    'graphql/**/*.js',
   ],
   coverageDirectory: 'coverage',
   coverageReporters: ['text', 'lcov', 'html'],

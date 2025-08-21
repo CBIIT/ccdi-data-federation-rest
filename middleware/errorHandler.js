@@ -10,49 +10,31 @@ const errorHandler = (err, req, res, next) => {
     userAgent: req.get('User-Agent'),
   });
 
-  // Default error response
-  let statusCode = 500;
-  let message = 'Internal Server Error';
-  let details = null;
+  // Domain aware mapping to spec error envelope
+  let statusCode = err.statusCode || 500;
+  let kind = err.kind || 'InternalServerError';
+  let message = err.message || 'Internal server error';
+  const extension = {};
 
-  // Handle specific error types
   if (err.name === 'ValidationError') {
-    statusCode = 400;
-    message = 'Validation Error';
-    details = err.details;
-  } else if (err.name === 'GraphQLError') {
-    statusCode = 502;
-    message = 'GraphQL Service Error';
-    details = err.message;
-  } else if (err.code === 'ECONNREFUSED') {
-    statusCode = 503;
-    message = 'Service Unavailable';
-    details = 'Unable to connect to GraphQL service';
-  } else if (err.name === 'SyntaxError' && err.message.includes('JSON')) {
-    statusCode = 400;
-    message = 'Invalid JSON';
+    statusCode = 422;
+    kind = 'InvalidParameters';
+    extension.parameters = err.details?.map(d => d.context?.key).filter(Boolean) || [];
   }
-
-  // Don't expose stack trace in production
-  const response = {
-    error: {
-      message,
-      statusCode,
-      timestamp: new Date().toISOString(),
-      path: req.url,
-      method: req.method,
-    },
-  };
-
-  if (details) {
-    response.error.details = details;
+  if (err.name === 'SyntaxError' && err.message.includes('JSON')) {
+    statusCode = 400; kind = 'InvalidJSON';
   }
-
-  if (process.env.NODE_ENV === 'development') {
-    response.error.stack = err.stack;
+  if (err.name === 'GraphQLError') {
+    statusCode = 502; kind = 'UpstreamGraphQLError'; extension.upstream = err.graphqlErrors;
   }
+  if (err.field) { extension.field = err.field; extension.supported = err.supported; }
+  if (err.parameters) extension.parameters = err.parameters;
+  if (err.reason) extension.reason = err.reason;
+  if (err.entity) { extension.entity = err.entity; extension.id = err.id; }
 
-  res.status(statusCode).json(response);
+  const envelope = { errors: [ { kind, message, ...extension } ] };
+  if (process.env.NODE_ENV === 'development') envelope.errors[0].stack = err.stack;
+  res.status(statusCode).json(envelope);
 };
 
 module.exports = errorHandler;

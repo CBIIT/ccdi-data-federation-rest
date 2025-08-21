@@ -1,6 +1,5 @@
 const express = require('express');
 const router = express.Router();
-const graphqlClient = require('../graphql/client');
 const { getCache } = require('../config/redis');
 const logger = require('../config/logger');
 
@@ -61,8 +60,8 @@ router.get('/', async (req, res) => {
   try {
     const timestamp = new Date().toISOString();
     
-    // Check GraphQL service health
-    const graphqlHealth = await graphqlClient.healthCheck();
+  // GraphQL removed – mark as deprecated
+  const graphqlHealth = { status: 'removed', timestamp };
     
     // Check Redis health (if configured)
     let redisHealth = { status: 'not_configured', timestamp };
@@ -78,7 +77,7 @@ router.get('/', async (req, res) => {
       };
     }
 
-    const overallStatus = graphqlHealth.status === 'healthy' ? 'healthy' : 'unhealthy';
+  const overallStatus = 'healthy';
     const statusCode = overallStatus === 'healthy' ? 200 : 503;
 
     const healthResponse = {
@@ -129,7 +128,7 @@ router.get('/', async (req, res) => {
 router.get('/readiness', async (req, res) => {
   try {
     // Check if GraphQL service is accessible
-    await graphqlClient.healthCheck();
+  // GraphQL removed
     
     res.status(200).json({
       status: 'ready',
