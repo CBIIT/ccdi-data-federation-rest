@@ -1,5 +1,5 @@
 
-# REST to Memgraph Adapter - System Design (JavaScript)
+# REST to Memgraph Adapter - System Design (Node.js)
 
 ## Goal
 
@@ -20,54 +20,54 @@ graph TD
 ##  Components
 The system is decomposed into focused layers so query logic, transport, and infrastructure concerns remain isolated and testable.
 
-### 1. REST API Layer (Express.js)
+### REST API Layer (Express.js)
 - Defines and documents REST endpoints (e.g. `/sample/by/{field}/count`)
 - Handles HTTP concerns: routing, parsing, status codes, paging, filtering
 - Delegates all data fetching to the Service layer (no raw Cypher here)
 
-### 2. Service Layer
+### Service Layer
 - Orchestrates one or more repository (data access) calls
 - Implements domain logic / aggregations / post-processing
 - Converts lower‑level data structures into response DTOs
 
-### 3. Data Access Layer (Memgraph Repository)
+### Data Access Layer (Memgraph Repository)
 - Encapsulates Cypher queries & parameter binding
 - Provides reusable functions: `getSampleCountsBy(field)`, etc.
 - Central place to optimize queries / add caching hints
 
-### 4. Memgraph Graph Database
+### Memgraph Graph Database
 - Stores domain entities as nodes & relationships (e.g. `(:Sample)`)
 - Queried via Cypher over Bolt protocol
 
-### 5. Caching Layer (Optional)
+### Caching Layer (Optional)
 - Redis (or in‑memory) for hot/read‑heavy aggregation endpoints
 - Key strategy: namespaced keys `sample:count:<field>` with TTL
 
-### 6. Validation & Security
+### Validation & Security
 - Input validation (Joi / express-validator)
 - Rate limiting, CORS, Helmet, auth (future JWT / API key)
 
-### 7. Observability
+### Observability
 - Structured logging (winston) with request correlation IDs
 - Metrics (Prometheus client) & health/readiness probes
 
-### 8. Configuration & Secrets
+### Configuration & Secrets
 - Centralized config module sourcing from environment variables
 - Supports environment overlays (dev, test, prod)
 
-### 9. Error Handling
+### Error Handling
 - Normalizes errors to a consistent JSON envelope
 - Maps internal exceptions (validation, unsupported field, cypher failure) to proper HTTP codes
 
 ---
 
-## 🧰 Tech Stack
+## Tech Stack
 
 | Layer | Technology | Purpose |
 |-------|------------|---------|
-| Language & Runtime | JavaScript (Node.js) | Server-side logic |
+| Runtime | Node.js (JavaScript) | Server-side logic & dependency ecosystem |
 | Web Framework | Express.js | RESTful routing and middleware |
-| Graph Database Client | `memgraph-js` (preferred) or `@memgraph/mgclient` | Bolt connectivity & Cypher execution |
+| Graph Database Client | `neo4j-driver` | Bolt connectivity & Cypher execution against Memgraph (direct driver) |
 | Env Config | dotenv + centralized config module | Manage secrets and endpoints |
 | Input Validation | joi or express-validator | Validate REST parameters |
 | Caching (optional) | Redis | Cache Cypher query results |
@@ -144,7 +144,7 @@ Edge Cases:
 
 ---
 
-## 🧮 Pagination & Link Headers
+## Pagination & Link Headers
 
 Parameters: `page` (1-based, default 1), `per_page` (default 100 unless overridden via config).
 
@@ -162,7 +162,7 @@ Include only relations applicable per spec requirements.
 
 ---
 
-## 🧾 Error Handling Strategy
+## Error Handling Strategy
 
 Unified envelope:
 ```json
@@ -182,7 +182,7 @@ Middleware order: `requestContext` → `validation` → `routes` → `errorHandl
 
 ---
 
-## 🧠 Summary & Aggregation Endpoints (`/summary`)
+## Summary & Aggregation Endpoints (`/summary`)
 
 Each entity summary aggregates selected metrics (defined in `responses.Summary`). Implementation approach:
 * Precompute heavy aggregates (optional) using scheduled job writing back to a `Summary` node / in-memory cache.
@@ -190,7 +190,7 @@ Each entity summary aggregates selected metrics (defined in `responses.Summary`)
 
 ---
 
-## 🧪 Testing Approach (Spec Alignment)
+## Testing Approach (Spec Alignment)
 
 Test layers:
 1. Unit: predicate builder → given filters produce expected Cypher & params.
@@ -199,7 +199,7 @@ Test layers:
 
 ---
 
-## 🔐 Security & Hardening (Spec-Relevant)
+## Security & Hardening (Spec-Relevant)
 * Rate limiting on high-cardinality endpoints `/subject` & `/sample`.
 * Field allowlist eliminates Cypher injection surface.
 * Strict JSON parsing & size limits.
@@ -207,7 +207,7 @@ Test layers:
 
 ---
 
-## ♻️ Caching Policy
+## Caching Policy
 | Endpoint Type | Cache Scope | TTL | Invalidation |
 |---------------|-------------|-----|--------------|
 | `/by/{field}/count` | key per entity+field+filter-hash | 10–30 min | Data load batch completion |
@@ -216,7 +216,7 @@ Test layers:
 
 ---
 
-## 🏗️ Implementation Phases
+## Implementation Phases
 1. Bootstrap layers & config + health/metrics.
 2. Implement metadata fields repository (drives allowlists).
 3. Implement Subject list + count + summary (pattern establishes framework).
@@ -230,7 +230,7 @@ Test layers:
 
 ---
 
-## �🗂️ Folder Structure
+## Folder Structure
 Proposed refactor (aligning with existing folders while removing GraphQL specifics):
 
 ```
@@ -275,7 +275,7 @@ Notes:
 
 ---
 
-## 🔄 REST to Cypher Mapping
+## REST to Cypher Mapping
 
 ### Example Mapping Table
 
@@ -289,51 +289,61 @@ Notes:
 
 ---
 
-## 📄 sample.js - REST Route
+## sample.js - REST Route
 
 ```js
 const express = require('express');
-const mg = require('@memgraph/mgclient'); // or use memgraph-js
+const neo4j = require('neo4j-driver');
 const router = express.Router();
 
-const FIELD_TO_CYPHER_MAP = {
+const FIELD_TO_PROPERTY_MAP = {
   tumor_status: 'tumor_status',
-  anatomic_site: 'anatomic_site',
+  anatomical_sites: 'anatomical_sites', // list field example
   tumor_classification: 'tumor_classification',
 };
 
-// Create a Memgraph connection pool or client
-const client = new mg.Client({
-  host: 'localhost',
-  port: 7687,
-  // user, password if needed
-});
+// Single shared driver (initialize once per process)
+const driver = neo4j.driver(
+  process.env.MEMGRAPH_URI || 'bolt://localhost:7687',
+  neo4j.auth.basic(process.env.MEMGRAPH_USER || 'neo4j', process.env.MEMGRAPH_PASSWORD || 'password'),
+  { disableLosslessIntegers: true }
+);
 
-router.get('/by/:field/count', async (req, res) => {
+router.get('/by/:field/count', async (req, res, next) => {
   const field = req.params.field;
-  const cypherField = FIELD_TO_CYPHER_MAP[field];
+  const property = FIELD_TO_PROPERTY_MAP[field];
 
-  if (!cypherField) {
+  if (!property) {
     return res.status(422).json({
       errors: [
         {
           kind: 'UnsupportedField',
           field,
-          reason: `This field is not present for samples.`,
-          message: `Field '${field}' is not supported.`,
+            reason: 'This field is not present for samples.',
+            message: `Field '${field}' is not supported.`,
         },
       ],
     });
   }
 
-  const query = `MATCH (s:Sample) RETURN s.${cypherField} AS field, count(*) AS count`;
-
+  const session = driver.session({ defaultAccessMode: neo4j.session.READ });
   try {
-    const result = await client.execute(query);
-    // result.records is an array of { field, count }
-    return res.json(result.records);
+    // Handle potential list UNWIND automatically
+    const cypher = `
+      MATCH (s:Sample)
+      WITH s, s.${property} AS raw
+      ${property === 'anatomical_sites' ? 'UNWIND raw AS value' : 'WITH raw AS value'}
+      WITH value WHERE value IS NOT NULL
+      RETURN value AS field, count(*) AS count
+      ORDER BY count DESC, field ASC
+    `;
+    const result = await session.run(cypher, {});
+    const payload = result.records.map(r => ({ field: r.get('field'), count: r.get('count') }));
+    return res.json(payload);
   } catch (err) {
-    return res.status(500).json({ message: 'Internal Server Error', details: err.message });
+    return next(err);
+  } finally {
+    await session.close();
   }
 });
 
@@ -342,7 +352,7 @@ module.exports = router;
 
 ---
 
-## 📄 app.js - Entry Point
+## app.js - Entry Point
 
 ```js
 const express = require('express');
@@ -359,7 +369,7 @@ app.listen(3000, () => {
 
 ---
 
-## 🧪 Example Response
+## Example Response
 
 ```json
 [
@@ -370,7 +380,7 @@ app.listen(3000, () => {
 
 ---
 
-## ✅ Summary
+## Summary
 
 - Implements full OpenAPI surface from `swagger.yml` across Subjects, Samples, Files & related registries.
 - Input filters safely translated into parameterized Cypher.
