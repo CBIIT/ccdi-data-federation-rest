@@ -1,5 +1,5 @@
 
-# REST to Memgraph Adapter - System Design (Node.js)
+# REST to Memgraph Adapter - System Design (Python/FastAPI)
 
 ## Goal
 
@@ -11,7 +11,7 @@ Expose a RESTful API that directly queries a Memgraph graph database, so clients
 
 ```mermaid
 graph TD
-  A[Client REST] --> B[REST API Server Express.js]
+  A[Client REST] --> B[REST API Server FastAPI]
   B --> C[Memgraph Graph Database]
 ```
 
@@ -20,10 +20,12 @@ graph TD
 ##  Components
 The system is decomposed into focused layers so query logic, transport, and infrastructure concerns remain isolated and testable.
 
-### REST API Layer (Express.js)
-- Defines and documents REST endpoints (e.g. `/sample/by/{field}/count`)
-- Handles HTTP concerns: routing, parsing, status codes, paging, filtering
-- Delegates all data fetching to the Service layer (no raw Cypher here)
+### REST API Layer (FastAPI)
+- Defines and documents REST endpoints (e.g. `/sample/by/{field}/count`) with automatic OpenAPI schema.
+- Handles HTTP concerns: routing, parsing, status codes, paging, filtering.
+- Uses Pydantic models for request/response validation and serialization.
+- Dependency Injection for shared concerns (db sessions, config, cache).
+- Delegates all data fetching to the Service layer (no raw Cypher here).
 
 ### Service Layer
 - Orchestrates one or more repository (data access) calls
@@ -31,33 +33,33 @@ The system is decomposed into focused layers so query logic, transport, and infr
 - Converts lower‑level data structures into response DTOs
 
 ### Data Access Layer (Memgraph Repository)
-- Encapsulates Cypher queries & parameter binding
-- Provides reusable functions: `getSampleCountsBy(field)`, etc.
-- Central place to optimize queries / add caching hints
+- Encapsulates Cypher queries & parameter binding via the Neo4j Python driver (Memgraph-compatible).
+- Provides reusable functions: `get_sample_counts_by(field)`, etc.
+- Central place to optimize queries / add caching hints.
 
 ### Memgraph Graph Database
 - Stores domain entities as nodes & relationships (e.g. `(:Sample)`)
 - Queried via Cypher over Bolt protocol
 
 ### Caching Layer (Optional)
-- Redis (or in‑memory) for hot/read‑heavy aggregation endpoints
-- Key strategy: namespaced keys `sample:count:<field>` with TTL
+- Redis (or in‑memory) for hot/read‑heavy aggregation endpoints.
+- Key strategy: namespaced keys `sample:count:<field>` with TTL.
 
 ### Validation & Security
-- Input validation (Joi / express-validator)
-- Rate limiting, CORS, Helmet, auth (future JWT / API key)
+- Input validation with Pydantic schemas (FastAPI request models) and custom validators.
+- Rate limiting via `slowapi` (Starlette middleware), CORS via `CORSMiddleware`, security headers via `secure` or custom middleware, auth (future JWT / API key) via FastAPI dependencies.
 
 ### Observability
-- Structured logging (winston) with request correlation IDs
-- Metrics (Prometheus client) & health/readiness probes
+- Structured logging (`structlog` or standard `logging`) with request correlation IDs.
+- Metrics via `prometheus_client` and optional `starlette_exporter`; health/readiness probes.
 
 ### Configuration & Secrets
-- Centralized config module sourcing from environment variables
-- Supports environment overlays (dev, test, prod)
+- Centralized config using `pydantic-settings` (or environment variables with `python-dotenv`).
+- Supports environment overlays (dev, test, prod).
 
 ### Error Handling
-- Normalizes errors to a consistent JSON envelope
-- Maps internal exceptions (validation, unsupported field, cypher failure) to proper HTTP codes
+- Normalizes errors to a consistent JSON envelope.
+- FastAPI exception handlers map domain exceptions (validation, unsupported field, Cypher failure) to proper HTTP codes.
 
 ---
 
@@ -65,19 +67,19 @@ The system is decomposed into focused layers so query logic, transport, and infr
 
 | Layer | Technology | Purpose |
 |-------|------------|---------|
-| Runtime | Node.js (JavaScript) | Server-side logic & dependency ecosystem |
-| Web Framework | Express.js | RESTful routing and middleware |
-| Graph Database Client | `neo4j-driver` | Bolt connectivity & Cypher execution against Memgraph (direct driver) |
-| Env Config | dotenv + centralized config module | Manage secrets and endpoints |
-| Input Validation | joi or express-validator | Validate REST parameters |
-| Caching (optional) | Redis | Cache Cypher query results |
-| Logging | winston + morgan (request access logs) | Structured + HTTP logs |
-| Metrics (optional) | prom-client | Export Prometheus metrics |
-| Documentation | swagger-ui-express or Redoc | REST endpoint docs (OpenAPI) |
-| Security | helmet, cors, express-rate-limit | Headers, CORS & abuse protection |
-| Testing | Jest + supertest | Unit & integration tests |
+| Runtime | Python 3.10+ | Server-side logic |
+| Web Framework | FastAPI + Uvicorn | RESTful routing, async I/O, auto OpenAPI |
+| Graph Database Client | `neo4j` Python driver (Memgraph-compatible) | Bolt connectivity & Cypher execution |
+| Env Config | `pydantic-settings` + `python-dotenv` | Manage configuration and secrets |
+| Input Validation | Pydantic (FastAPI models) | Validate and serialize requests/responses |
+| Caching (optional) | `redis` (redis-py) or `redis.asyncio` | Cache Cypher query results |
+| Logging | `structlog` or `logging` + Uvicorn access logs | Structured app and HTTP logs |
+| Metrics (optional) | `prometheus_client` + `starlette_exporter` | Export Prometheus metrics |
+| Documentation | FastAPI auto docs (Swagger UI/Redoc) | REST endpoint docs (OpenAPI) |
+| Security | Starlette middlewares (CORS, GZip, TrustedHost), `slowapi` | Headers, CORS & abuse protection |
+| Testing | pytest + httpx (+ pytest-asyncio) | Unit & integration tests |
 | Containerization | Docker | Deployment packaging |
-| Linting / Style | eslint, prettier | Code quality & consistency |
+| Linting / Style | ruff, black, isort, mypy | Code quality & consistency |
 
 ---
 
@@ -151,7 +153,7 @@ Mappings:
 | Data cannot be shared (config) | 404 | UnshareableData |
 | Internal exception | 500 | InternalServerError (extension) |
 
-Middleware order: `requestContext` → `validation` → `routes` → `errorHandler` (maps domain errors to spec-compliant envelope).
+Middleware/handler order: `request_context` → `validation` (FastAPI models) → `routes` → `exception_handler` (maps domain errors to spec-compliant envelope).
 
 ---
 
@@ -166,17 +168,17 @@ Each entity summary aggregates selected metrics (defined in `responses.Summary`)
 ## Testing Approach (Spec Alignment)
 
 Test layers:
-1. Unit: predicate builder → given filters produce expected Cypher & params.
-2. Integration (Memgraph test container): seed minimal graph, exercise endpoints verifying status codes, pagination, Link headers, error kinds.
-3. Contract: validate `swagger.yml` & generated OpenAPI (if auto) diff (e.g., `jest-openapi` library) to ensure responses conform.
+1. Unit: predicate builder → given filters produce expected Cypher & params (pytest).
+2. Integration (Memgraph test container): seed minimal graph, exercise endpoints verifying status codes, pagination, Link headers, error kinds (pytest + httpx client).
+3. Contract: validate `swagger.yml` & generated OpenAPI (FastAPI) using `schemathesis` or `openapi-core` to ensure responses conform.
 
 ---
 
 ## Security & Hardening (Spec-Relevant)
-* Rate limiting on high-cardinality endpoints `/subject` & `/sample`.
+* Rate limiting on high-cardinality endpoints `/subject` & `/sample` via `slowapi`.
 * Field allowlist eliminates Cypher injection surface.
-* Strict JSON parsing & size limits.
-* CORS restricted by configuration (allowed origins list).
+* Strict JSON parsing & size limits (FastAPI validation, body size limit via ASGI server or middleware).
+* CORS restricted by configuration (allowed origins list via `CORSMiddleware`).
 
 ---
 
@@ -190,7 +192,7 @@ Test layers:
 ---
 
 ## Implementation Phases
-1. Bootstrap layers & config + health/metrics.
+1. Bootstrap FastAPI app, config, health/metrics.
 2. Implement metadata fields repository (drives allowlists).
 3. Implement Subject list + count + summary (pattern establishes framework).
 4. Extend to Sample, File.
@@ -204,80 +206,76 @@ Test layers:
 ---
 
 ## Folder Structure
-Refined structure including all API endpoint domains from the OpenAPI specification.
+Refined Python structure including all API endpoint domains from the OpenAPI specification.
 
 ```
 project-root/
-├── app.js                              # Express bootstrap
-├── package.json
-├── config/
-│   ├── index.js                        # Aggregated config (env parsing, defaults)
-│   ├── memgraphDriver.js               # neo4j-driver (Memgraph) singleton factory
-│   └── logger.js                       # Winston logger configuration
-├── db/                                 # Data access (repositories) – pure Cypher
-│   ├── subjectRepository.js            # Subject queries (list, show, counts, summary)
-│   ├── sampleRepository.js             # Sample queries
-│   ├── fileRepository.js               # File queries
-│   ├── metadataRepository.js           # Field allowlists & metadata field listings
-│   ├── namespaceRepository.js          # Namespace retrieval
-│   ├── organizationRepository.js       # Organization retrieval
-│   ├── infoRepository.js               # Server info (version, build data)
-│   └── diagnosisRepository.js          # Experimental diagnosis search logic
-├── services/                           # Domain orchestration / business logic
-│   ├── subjectService.js
-│   ├── sampleService.js
-│   ├── fileService.js
-│   ├── metadataService.js
-│   ├── namespaceService.js
-│   ├── organizationService.js
-│   ├── infoService.js
-│   └── diagnosisService.js             # Wraps experimental endpoints
-├── routes/                             # HTTP layer (validation + mapping to services)
-│   ├── index.js                        # Aggregates and mounts all routers
-│   ├── subject.js                      # /subject, /subject/{...}, /subject/by/{field}/count, /subject/summary
-│   ├── sample.js                       # /sample, /sample/{...}, /sample/by/{field}/count, /sample/summary
-│   ├── file.js                         # /file, /file/{...}, /file/by/{field}/count, /file/summary
-│   ├── metadata.js                     # /metadata/fields/{entity}
-│   ├── namespace.js                    # /namespace, /namespace/{organization}/{namespace}
-│   ├── organization.js                 # /organization, /organization/{name}
-│   ├── info.js                         # /info
-│   ├── subjectDiagnosis.js             # /subject-diagnosis (experimental)
-│   └── sampleDiagnosis.js              # /sample-diagnosis (experimental)
-├── middleware/
-│   ├── validation.js                   # Schema-based query/path validation
-│   ├── rateLimiter.js                  # express-rate-limit configuration
-│   ├── errorHandler.js                 # Normalizes thrown errors to spec envelope
-│   ├── requestContext.js               # Correlation IDs, timing, logging context
-│   └── pagination.js                   # Common pagination parsing & Link header builder
-├── cache/
-│   ├── redisClient.js                  # Redis initialization
-│   └── cacheKeys.js                    # Deterministic key builders (counts, summary)
-├── lib/                                # Shared utilities (avoid circular deps)
-│   ├── cypherBuilder.js                # Dynamic WHERE / count query generation
-│   ├── fieldAllowlist.js               # Loads + caches allowable filter/aggregation fields
-│   └── errorTypes.js                   # Custom error classes (UnsupportedField, etc.)
-├── docs/
-│   ├── openapi.yaml                    # REST API specification (source of truth)
-│   └── design/                         # Additional architecture notes (optional)
+├── pyproject.toml                      # Poetry or PEP 621 metadata
+├── app/
+│   ├── main.py                         # FastAPI app factory, middleware, routes mount
+│   ├── api/
+│   │   ├── v1/
+│   │   │   ├── __init__.py
+│   │   │   ├── routes/
+│   │   │   │   ├── subject.py          # /subject endpoints
+│   │   │   │   ├── sample.py           # /sample endpoints
+│   │   │   │   ├── file.py             # /file endpoints
+│   │   │   │   ├── metadata.py         # /metadata endpoints
+│   │   │   │   ├── namespace.py        # /namespace endpoints
+│   │   │   │   ├── organization.py     # /organization endpoints
+│   │   │   │   ├── info.py             # /info
+│   │   │   │   ├── subject_diagnosis.py
+│   │   │   │   └── sample_diagnosis.py
+│   │   │   └── deps.py                 # Common dependencies (db, cache, settings)
+│   ├── services/
+│   │   ├── subject_service.py
+│   │   ├── sample_service.py
+│   │   ├── file_service.py
+│   │   ├── metadata_service.py
+│   │   ├── namespace_service.py
+│   │   ├── organization_service.py
+│   │   ├── info_service.py
+│   │   └── diagnosis_service.py
+│   ├── db/
+│   │   ├── memgraph.py                 # Neo4j driver init (Memgraph)
+│   │   ├── subject_repository.py
+│   │   ├── sample_repository.py
+│   │   ├── file_repository.py
+│   │   ├── metadata_repository.py
+│   │   ├── namespace_repository.py
+│   │   ├── organization_repository.py
+│   │   ├── info_repository.py
+│   │   └── diagnosis_repository.py
+│   ├── models/
+│   │   ├── dto.py                      # Pydantic response/request models
+│   │   └── errors.py                   # Error envelopes
+│   ├── core/
+│   │   ├── config.py                   # Settings (pydantic-settings)
+│   │   ├── logging.py                  # structlog/logging config
+│   │   └── pagination.py               # Common pagination utils & Link builders
+│   ├── cache/
+│   │   ├── redis.py                    # Redis client (sync/async)
+│   │   └── keys.py                     # Deterministic key builders (counts, summary)
+│   └── lib/
+│       ├── cypher_builder.py           # Dynamic WHERE / count query generation
+│       └── field_allowlist.py          # Loads allowable filter/aggregation fields
 ├── tests/
-│   ├── integration/
-│   │   ├── subject.int.test.js
-│   │   ├── sample.int.test.js
-│   │   ├── file.int.test.js
-│   │   ├── metadata.int.test.js
-│   │   ├── namespace.int.test.js
-│   │   ├── organization.int.test.js
-│   │   ├── info.int.test.js
-│   │   └── diagnosis.int.test.js
 │   ├── unit/
-│   │   ├── cypherBuilder.test.js
-│   │   ├── fieldAllowlist.test.js
-│   │   └── pagination.test.js
-│   └── setup.js                        # Jest global setup (Memgraph container, env)
+│   │   ├── test_cypher_builder.py
+│   │   ├── test_field_allowlist.py
+│   │   └── test_pagination.py
+│   └── integration/
+│       ├── test_subject.py
+│       ├── test_sample.py
+│       ├── test_file.py
+│       ├── test_metadata.py
+│       ├── test_namespace.py
+│       ├── test_organization.py
+│       ├── test_info.py
+│       └── test_diagnosis.py
 ├── scripts/
-│   ├── seed.js                         # Load seed data into Memgraph
-│   ├── build-openapi.js                # (Optional) validation or bundling of spec
-│   └── generate-allowlist.js           # Derive allowlist from openapi -> fieldAllowlist
+│   ├── seed.py                         # Load seed data into Memgraph
+│   └── generate_allowlist.py           # Derive allowlist from OpenAPI
 ├── docker/
 │   ├── docker-compose.dev.yml
 │   └── memgraph.conf                   # Custom Memgraph config (if needed)
@@ -288,8 +286,8 @@ project-root/
 Notes:
 - Each repository exposes only pure data access functions returning plain objects.
 - Services layer composes repositories, applies business logic & caching.
-- Route modules stay thin: validation → service call → response mapping.
-- `fieldAllowlist.js` hydrated at startup (from metadataRepository or static file) to validate `/by/{field}/count` and filter params.
+- Route modules stay thin: validation → service call → response mapping (Pydantic models).
+- `field_allowlist.py` hydrated at startup (from metadata repository or static file) to validate `/by/{field}/count` and filter params.
 - Experimental endpoints placed with explicit naming to allow easy isolation or removal.
 
 ---
